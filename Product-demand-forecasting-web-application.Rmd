@@ -1,0 +1,167 @@
+---
+title: "Product demand forecasting web application"
+author: "Catarina Jesus"
+date: "07/14/2023"
+output: html_document
+runtime: shiny
+
+---
+
+# Product demand forecasting web application
+
+```{r global_options, include=FALSE}
+knitr::opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+```{r, echo = FALSE, warning=FALSE, message=FALSE}
+library(shiny)
+library(tidyverse)
+library(forecast)
+library(plotly)
+library(lubridate)
+# historical records from multiple stores
+fsales <- "https://raw.githubusercontent.com/multidis/hult-inter-bus-reports-r/main/forecasting/sales_weekly.csv"
+sales <- read_csv(fsales)
+
+# latest (current) week
+nweek_now <- max(sales$Week)
+
+#Sales
+sales$Week <- sales$Week +1
+
+# Create a new column 'Quarter' representing quarters per year
+sales$Quarter <- ceiling(sales$Week / 13)
+
+# latest (current) quarter
+nquarter_now <- max(sales$Quarter)
+```
+
+```{r echo = FALSE}
+ui <- fluidPage(
+  tabsetPanel(
+    tabPanel("Sales Performance", 
+             helpText("In this tab is possible to analyze the performance indicator for the current week´s actual sales vs the forecast comupted at the end of the last week in a selected store.
+                       Operate with the 'Select store' dropdown to choose the store."),
+             sidebarLayout(
+               sidebarPanel(
+                 selectInput("storen_salesperf", label = "Select store: ",
+                             choices = 1:max(sales$Store), selected = 1)
+               ),
+               mainPanel(
+                 h3(textOutput("salesperformanceindicator"), style = "font-weight: bold;"),
+                 plotlyOutput("salesperformancePlot")
+               )
+             )
+    ),
+    tabPanel("Quarter Sales Forecast", 
+             helpText("In this tab is possible to analyze the forecast for a specific future quarter during the upcoming year in a selected store.
+                       Operate with the 'Select store' dropdown to choose the store, and the 'Forecast scope (Quarter)' slider to choose the forecast scope."),
+             sidebarLayout(
+               sidebarPanel(
+                 selectInput("storenum_quart", label = "Select store: ",
+                             choices = 1:max(sales$Store), selected = 1),
+                 sliderInput("scope", label = "Forecast scope (Quarter): ",
+                             min = 1, max = 4, value = 8, step = 1)
+               ),
+               mainPanel(
+                 plotlyOutput("forecastPlot")
+               )
+             )
+    )
+    
+    )
+  )
+
+
+```
+
+```{r echo = FALSE}
+server <- function(input, output) {
+  forecast_current_week <- reactive({
+    total_sales_until_last_week <- sales  %>%
+      subset(Week <= nweek_now - 1)
+    
+    sales_ts <- ts(total_sales_until_last_week %>% filter(Store == input$storen_salesperf) %>%
+                     select(Weekly_Sales), frequency = 52)
+    arima_model <- auto.arima(sales_ts, seasonal.test = "seas")
+    arima_pred <- forecast(arima_model, h = 1)
+    
+    as.numeric(arima_pred$mean)
+  })
+  
+  output$salesperformanceindicator <- renderText({
+    actual_sales <- sales %>% filter(Store == input$storen_salesperf, Week == nweek_now) %>%
+      pull(Weekly_Sales)
+    
+    salesperformance <- actual_sales - forecast_current_week()
+    sales_percent <- (salesperformance / actual_sales) * 100
+    
+    paste("Sales performance for the current week: ", round(salesperformance, 2), 
+          "(", round(sales_percent, 2), "%)")
+  })
+  
+  output$salesperformancePlot <- renderPlotly({
+    actual_sales <- sales %>% filter(Store == input$storen_salesperf, Week == nweek_now) %>%
+      pull(Weekly_Sales)
+    
+    sales_data <- data.frame(Type = c("Actual Sales", "Forecast Sales"),
+                             Sales = c(actual_sales, forecast_current_week()))
+    
+    
+    plot <- ggplot(sales_data, aes(Type, Sales, fill = Type)) +
+        geom_bar(stat = "identity", position = "dodge") +
+        labs(x = "", y = "Sales",
+        fill = "", 
+        title = "Current Week Sales vs Forecast Week Sales") +
+    scale_fill_manual(values = c("Actual Sales" = "pink", "Forecast Sales" = "lightblue")) +
+    theme_minimal()+
+    scale_y_continuous(labels = scales::comma)
+
+    plot
+    
+  })
+  
+  quarterforecast <- reactive({
+    store_sales <- ts(sales %>% filter(Store == input$storenum_quart) %>%
+                        group_by(Quarter) %>%
+                        summarize(total_sales = sum(Weekly_Sales, na.rm = TRUE)) %>%
+                        select(total_sales),frequency=4)
+    
+    arima_model <- auto.arima(store_sales, seasonal.test = "seas")
+    arima_pred <- forecast(arima_model, h = input$scope)
+  
+    as.numeric(arima_pred$mean)
+  })
+  
+output$forecastPlot <- renderPlotly({
+  
+store_sales <- sales %>% filter(Store == input$storenum_quart) %>%
+                        group_by(Quarter) %>%
+                        summarize(total_sales = sum(Weekly_Sales, na.rm = TRUE)) %>%       select(Quarter, total_sales)
+forecasted_values <- quarterforecast()  
+  
+# Create a sequence of quarters for the forecasted values
+forecasted_quarters <- seq(nquarter_now +1, length.out = length(forecasted_values))
+
+# Create a dataframe for the forecasted sales
+forecasted_sales <- data.frame(Quarter = forecasted_quarters, total_sales = forecasted_values)
+
+# Combine the actual and forecasted sales data into a single dataframe
+final_data <- rbind(store_sales, forecasted_sales)
+
+
+final_data$color <- ifelse(final_data$Quarter <= nquarter_now, "actual", "forecasted")
+
+final_data %>%
+  ggplot(aes(x = Quarter, y = total_sales, color = color)) +
+  geom_path() +
+  labs(x = "Quarter", y = "Sales", title = "Actual vs Forecasted Sales") +
+  scale_color_manual(values = c("actual" = "pink", "forecasted" = "lightblue")) +
+  scale_y_continuous(labels = scales::comma)
+})
+  
+}
+
+shinyApp(ui = ui, server = server)
+```
+ 
