@@ -1,10 +1,19 @@
-# Product-demand-forecasting-web-application
-Web application with the performing sales forecasting for the upcoming periods
+# Product demand and Forecast in web application
 
-The following report shows the historical variations in retail product demand and aims to perform sales forecasting for upcoming periods. 
+Embark on a journey of strategic decision-making with SalesVision, a sophisticated web application designed for meticulous sales forecasting in upcoming periods. This intuitive tool not only unveils historical demand fluctuations in retail but is also dedicated to predicting sales trends for the future.
 
-The report shows two analyses:
+Live Performance Analysis:
 
-Analyzes of the current week’s performance indicator in the UI showing the current week's actual sales vs. forecast for the current week computed at the end of the last week.
+Dive into real-time insights, comparing the current week's actual sales with forecasts from the previous week.
 
-Analyzes sales forecast for a specific future quarter (during the upcoming year) selected in the UI.
+User-friendly interface for seamless navigation and quick decision-making.
+
+Tailored Future Quarter Forecasts:
+
+
+Forecast sales for specific quarters in the upcoming year, aligning predictions with business goals.
+
+Customize and optimize strategies based on detailed insights.
+
+Empower your team with a dynamic and responsive platform.
+
